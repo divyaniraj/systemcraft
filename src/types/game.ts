@@ -46,12 +46,10 @@ export interface TelemetryMetrics {
 }
 
 export interface LevelDefinition {
-  id: number;
-  round: number;
+  levelNumber: number; // 1, 2, or 3
   title: string;
   subtitle: string;
-  description: string;
-  interviewerBrief: string;
+  interviewerPrompt: string;
   targetRPS: number;
   surgeRPS: number;
   slaP99Ms: number;
@@ -67,4 +65,14 @@ export interface LevelDefinition {
     target: string;
   }[];
   tips: string[];
+}
+
+export interface Question {
+  id: number;
+  title: string;
+  slug: string;
+  difficulty: 'Easy' | 'Medium' | 'Medium-Hard' | 'Hard';
+  companyTags: string[];
+  description: string;
+  levels: LevelDefinition[];
 }

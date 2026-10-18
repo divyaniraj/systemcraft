@@ -74,6 +74,7 @@ const CanvasInternal: React.FC = () => {
         onDrop={onDrop}
         fitView
         colorMode="dark"
+        deleteKeyCode={['Backspace', 'Delete']}
         proOptions={{ hideAttribution: true }}
         defaultEdgeOptions={{
           animated: true,

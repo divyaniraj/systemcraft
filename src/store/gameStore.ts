@@ -12,12 +12,19 @@ import type {
   OnConnect, 
   Connection 
 } from '@xyflow/react';
-import type { ComponentType, LevelDefinition, SystemNodeData, TelemetryMetrics } from '../types/game';
-import { LEVELS } from '../data/levels';
+import type { ComponentType, LevelDefinition, Question, SystemNodeData, TelemetryMetrics } from '../types/game';
+import { SYSTEM_DESIGN_QUESTIONS } from '../data/questions';
 import { COMPONENT_CATALOG } from '../data/components';
 
 interface GameState {
+  questions: Question[];
+  currentQuestionIndex: number;
+  currentLevelIndex: number;
+  
+  // Active getters
+  currentQuestion: Question;
   currentLevel: LevelDefinition;
+  
   nodes: Node<SystemNodeData>[];
   edges: Edge[];
   isSimulating: boolean;
@@ -34,13 +41,16 @@ interface GameState {
   removeNode: (id: string) => void;
   toggleSimulation: () => void;
   toggleSurge: () => void;
-  loadLevel: (levelId: number) => void;
-  resetCurrentLevel: () => void;
+  selectQuestion: (index: number) => void;
+  selectLevel: (levelIndex: number) => void;
+  nextLevel: () => void;
+  resetCurrentCanvas: () => void;
   runSimulationTick: () => void;
 }
 
 function calculateInitialStateForLevel(level: LevelDefinition) {
   let counter = 0;
+  // Always clean: only start with the initial ingress node(s)
   const nodes: Node<SystemNodeData>[] = level.initialNodes.map((n) => {
     const spec = COMPONENT_CATALOG.find((c) => c.type === n.type)!;
     const id = `node-${counter++}`;
@@ -88,17 +98,25 @@ function calculateInitialStateForLevel(level: LevelDefinition) {
 }
 
 export const useGameStore = create<GameState>((set, get) => {
-  const initialLevel = LEVELS[1]; // Start with Level 2: The Flash Sale
+  const initialQuestions = SYSTEM_DESIGN_QUESTIONS;
+  const initialQIndex = 0; // Starts at Question 1: URL Shortener (Easy)
+  const initialLIndex = 0; // Level 1
+  const initialQuestion = initialQuestions[initialQIndex];
+  const initialLevel = initialQuestion.levels[initialLIndex];
   const initialSetup = calculateInitialStateForLevel(initialLevel);
 
   return {
+    questions: initialQuestions,
+    currentQuestionIndex: initialQIndex,
+    currentLevelIndex: initialLIndex,
+    currentQuestion: initialQuestion,
     currentLevel: initialLevel,
     nodes: initialSetup.nodes,
     edges: initialSetup.edges,
     isSimulating: true,
     isSurge: false,
     telemetry: initialSetup.telemetry,
-    interviewerFeedback: initialLevel.interviewerBrief,
+    interviewerFeedback: initialLevel.interviewerPrompt,
     isCompleted: false,
 
     onNodesChange: (changes) => {
@@ -116,7 +134,6 @@ export const useGameStore = create<GameState>((set, get) => {
     },
 
     onConnect: (connection: Connection) => {
-      // Architectural validation
       const { nodes } = get();
       const sourceNode = nodes.find((n) => n.id === connection.source);
       const targetNode = nodes.find((n) => n.id === connection.target);
@@ -126,13 +143,13 @@ export const useGameStore = create<GameState>((set, get) => {
       // Rule: Clients cannot connect directly to Database
       if (sourceNode.data.type === 'client' && targetNode.data.type === 'database') {
         set({
-          interviewerFeedback: '⚠️ Rule Violation: Clients cannot connect directly to databases! Direct DB exposure is unsafe. Connect via an App Server or Load Balancer.',
+          interviewerFeedback: '⚠️ Rule Violation: Direct DB access from clients is unsafe! Always route requests through an App Compute Node or Load Balancer.',
         });
         return;
       }
 
-      // Rule: Cache cannot be traffic ingress
-      if (sourceNode.data.type === 'client' && sourceNode.data.type === targetNode.data.type) {
+      // Rule: Ingress cannot connect directly to another ingress
+      if (sourceNode.data.type === 'client' && targetNode.data.type === 'client') {
         return;
       }
 
@@ -150,7 +167,7 @@ export const useGameStore = create<GameState>((set, get) => {
       get().runSimulationTick();
     },
 
-    addNode: (type: ComponentType, position = { x: 300, y: 200 }) => {
+    addNode: (type: ComponentType, position = { x: 340, y: 220 }) => {
       const spec = COMPONENT_CATALOG.find((c) => c.type === type);
       if (!spec) return;
 
@@ -199,29 +216,64 @@ export const useGameStore = create<GameState>((set, get) => {
       get().runSimulationTick();
     },
 
-    loadLevel: (levelId: number) => {
-      const targetLevel = LEVELS.find((l) => l.id === levelId) || LEVELS[0];
+    selectQuestion: (qIndex: number) => {
+      const questions = get().questions;
+      const targetQuestion = questions[qIndex] || questions[0];
+      const targetLevel = targetQuestion.levels[0];
       const setup = calculateInitialStateForLevel(targetLevel);
+
       set({
+        currentQuestionIndex: qIndex,
+        currentLevelIndex: 0,
+        currentQuestion: targetQuestion,
         currentLevel: targetLevel,
         nodes: setup.nodes,
         edges: setup.edges,
         telemetry: setup.telemetry,
-        interviewerFeedback: targetLevel.interviewerBrief,
+        interviewerFeedback: targetLevel.interviewerPrompt,
         isSurge: false,
         isCompleted: false,
       });
       get().runSimulationTick();
     },
 
-    resetCurrentLevel: () => {
+    selectLevel: (lIndex: number) => {
+      const currentQuestion = get().currentQuestion;
+      const targetLevel = currentQuestion.levels[lIndex] || currentQuestion.levels[0];
+      const setup = calculateInitialStateForLevel(targetLevel);
+
+      set({
+        currentLevelIndex: lIndex,
+        currentLevel: targetLevel,
+        nodes: setup.nodes,
+        edges: setup.edges,
+        telemetry: setup.telemetry,
+        interviewerFeedback: targetLevel.interviewerPrompt,
+        isSurge: false,
+        isCompleted: false,
+      });
+      get().runSimulationTick();
+    },
+
+    nextLevel: () => {
+      const { currentQuestion, currentQuestionIndex, currentLevelIndex, questions } = get();
+      if (currentLevelIndex < currentQuestion.levels.length - 1) {
+        // Move to next sub-level of the same question
+        get().selectLevel(currentLevelIndex + 1);
+      } else if (currentQuestionIndex < questions.length - 1) {
+        // Solved all 3 levels of this question, advance to next question!
+        get().selectQuestion(currentQuestionIndex + 1);
+      }
+    },
+
+    resetCurrentCanvas: () => {
       const level = get().currentLevel;
       const setup = calculateInitialStateForLevel(level);
       set({
         nodes: setup.nodes,
         edges: setup.edges,
         telemetry: setup.telemetry,
-        interviewerFeedback: level.interviewerBrief,
+        interviewerFeedback: level.interviewerPrompt,
         isSurge: false,
         isCompleted: false,
       });
@@ -268,7 +320,7 @@ export const useGameStore = create<GameState>((set, get) => {
             monthlyCost: totalCost,
             status: 'failing',
           },
-          interviewerFeedback: '⚠️ 100% Drop Rate: Your clients have nowhere to send their traffic! Connect them to a Load Balancer or App Server.',
+          interviewerFeedback: '⚠️ 100% Drop Rate: Your clients are not connected to anything! Pick a component from the toolbox and connect user traffic.',
         });
         return;
       }
@@ -277,6 +329,7 @@ export const useGameStore = create<GameState>((set, get) => {
       const appNodes = nodes.filter((n) => n.data.type === 'compute');
       const cacheNodes = nodes.filter((n) => n.data.type === 'cache');
       const dbNodes = nodes.filter((n) => n.data.type === 'database');
+      const queueNodes = nodes.filter((n) => n.data.type === 'queue');
 
       // Check if DB exists
       if (dbNodes.length === 0) {
@@ -291,7 +344,7 @@ export const useGameStore = create<GameState>((set, get) => {
             monthlyCost: totalCost,
             status: 'failing',
           },
-          interviewerFeedback: '⚠️ Missing Data Store: Where are you storing user orders? Connect a Database to persist data.',
+          interviewerFeedback: '⚠️ Missing Data Store: Connect a Database so your application can read and write persistent data.',
         });
         return;
       }
@@ -309,16 +362,23 @@ export const useGameStore = create<GameState>((set, get) => {
         edges.some((e) => e.target === c.id)
       );
 
+      // Check queue presence
+      const hasActiveQueue = queueNodes.some((q) => 
+        edges.some((e) => e.target === q.id)
+      );
+
       // Database incoming traffic:
-      const dbTrafficRatio = hasActiveCache ? 0.12 : 1.0;
+      // With cache: 90% of reads are absorbed. Only 10% touch DB.
+      // With queue: write bursts are smoothed out.
+      const dbTrafficRatio = hasActiveCache ? 0.10 : 1.0;
       const dbIncomingRPS = Math.round(activeRPS * dbTrafficRatio);
       const totalDbCapacity = dbNodes.reduce((sum, d) => sum + d.data.maxRPS, 0);
-      const dbOverloaded = dbIncomingRPS > totalDbCapacity;
+      const dbOverloaded = dbIncomingRPS > totalDbCapacity && !hasActiveQueue;
 
       // Calculate latencies
       let p50 = 18;
-      let p95 = 65;
-      let p99 = 140;
+      let p95 = 55;
+      let p99 = 120;
       let errorRate = 0.01;
       let bottleneckId: string | null = null;
       let feedback = '';
@@ -328,55 +388,62 @@ export const useGameStore = create<GameState>((set, get) => {
         p95 = 9999;
         p99 = 9999;
         errorRate = 100;
-        feedback = '⚠️ No compute layer! Traffic cannot reach the database without an application server.';
+        feedback = '⚠️ Missing Compute Layer: Connect user traffic to at least one App Compute Node.';
       } else if (appOverloaded) {
         const ratio = activeRPS / totalAppCapacity;
-        p50 = Math.round(50 * ratio);
-        p95 = Math.round(250 * ratio);
-        p99 = Math.round(600 * ratio);
-        errorRate = Math.min(15, Number(((ratio - 1) * 20).toFixed(2)));
+        p50 = Math.round(45 * ratio);
+        p95 = Math.round(180 * ratio);
+        p99 = Math.round(520 * ratio);
+        errorRate = Math.min(18, Number(((ratio - 1) * 22).toFixed(2)));
         bottleneckId = activeAppServers[0]?.id || null;
-        feedback = `⚠️ App Servers Overloaded! Current traffic (${activeRPS} RPS) exceeds compute capacity (${totalAppCapacity} RPS). Add another App Server or upgrade capacity!`;
+        feedback = `⚠️ Compute Bottleneck! Current load (${activeRPS.toLocaleString()} RPS) exceeds server capacity (${totalAppCapacity.toLocaleString()} RPS). Add a Load Balancer and scale App Servers!`;
       } else if (dbOverloaded) {
         const dbRatio = dbIncomingRPS / totalDbCapacity;
-        p50 = hasActiveCache ? 24 : Math.round(180 * dbRatio);
-        p95 = Math.round(320 * dbRatio);
-        p99 = Math.round(680 * dbRatio);
-        errorRate = Number((Math.min(8, (dbRatio - 1) * 6)).toFixed(2));
+        p50 = hasActiveCache ? 20 : Math.round(160 * dbRatio);
+        p95 = Math.round(280 * dbRatio);
+        p99 = Math.round(620 * dbRatio);
+        errorRate = Number((Math.min(9, (dbRatio - 1) * 7)).toFixed(2));
         bottleneckId = dbNodes[0]?.id || null;
 
         if (!hasActiveCache) {
-          feedback = `🔴 Database Lockup! All ${activeRPS} RPS are hammering PostgreSQL directly without a cache. Add a Redis Cache to shield the DB!`;
+          feedback = `🔴 Database Lockup! All ${activeRPS.toLocaleString()} RPS are hitting PostgreSQL directly. Insert a Redis Cache to shield the DB!`;
         } else {
-          feedback = `⚠️ DB Write Contention! Even with Redis, writes are exceeding DB write pool capacity. Consider an Asynchronous Message Queue or Read Replicas.`;
+          feedback = `⚠️ DB Write Queue Full! Incoming writes exceed disk capacity. Introduce a Kafka Message Queue to buffer requests.`;
         }
       } else {
-        // Passing state
+        // Healthy system
         if (hasActiveCache) {
-          p50 = 16;
-          p95 = 72;
-          p99 = 245;
-          errorRate = 0.02;
-          feedback = '🟢 Excellent architecture! Redis is absorbing read traffic, and App Servers are balanced. Can your design survive a flash surge?';
+          p50 = 12;
+          p95 = 48;
+          p99 = Math.min(currentLevel.slaP99Ms - 15, 65);
+          errorRate = 0.01;
+          feedback = '🟢 Outstanding design! Cache is absorbing traffic, compute is balanced, and latency is well within SLA. Try simulating a spike!';
         } else {
-          p50 = 35;
-          p95 = 110;
-          p99 = 285;
-          errorRate = 0.05;
-          feedback = '⚡ System is stable for now, but database load is heavy. Watch out when traffic spikes!';
+          p50 = 30;
+          p95 = 90;
+          p99 = Math.min(currentLevel.slaP99Ms + 20, 210);
+          errorRate = 0.04;
+          feedback = '⚡ Basic architecture functional. Watch your p99 latency as traffic scales!';
         }
       }
 
       // Check budget
       const overBudget = totalCost > currentLevel.budgetLimit;
       if (overBudget) {
-        feedback = `💸 Over Budget! Your monthly cloud bill is $${totalCost}/mo, exceeding the $${currentLevel.budgetLimit} limit. Optimize component count!`;
+        feedback = `💸 Over Budget! Your monthly cloud bill is $${totalCost}/mo, which exceeds the $${currentLevel.budgetLimit} limit. Remove unnecessary instances!`;
       }
 
-      // Check victory
-      const isPassing = !appOverloaded && !dbOverloaded && !overBudget && p99 <= currentLevel.slaP99Ms && errorRate <= 0.1;
+      // Check pass criteria
+      const isPassing = 
+        !appOverloaded && 
+        !dbOverloaded && 
+        !overBudget && 
+        p99 <= currentLevel.slaP99Ms && 
+        errorRate <= 0.1 && 
+        activeAppServers.length > 0 && 
+        dbNodes.length > 0;
 
-      // Update Node load states visually
+      // Update node load states
       const updatedNodes = nodes.map((n) => {
         let load = 0;
         let status: 'healthy' | 'warning' | 'critical' | 'idle' = 'healthy';
@@ -392,12 +459,15 @@ export const useGameStore = create<GameState>((set, get) => {
           load = Math.min(100, Math.round((serverShare / n.data.maxRPS) * 100));
           status = load > 90 ? 'critical' : load > 75 ? 'warning' : 'healthy';
         } else if (n.data.type === 'cache') {
-          const cacheRPS = Math.round(activeRPS * 0.88);
+          const cacheRPS = Math.round(activeRPS * 0.90);
           load = Math.min(100, Math.round((cacheRPS / n.data.maxRPS) * 100));
           status = 'healthy';
         } else if (n.data.type === 'database') {
           load = Math.min(100, Math.round((dbIncomingRPS / n.data.maxRPS) * 100));
           status = load >= 95 ? 'critical' : load > 75 ? 'warning' : 'healthy';
+        } else if (n.data.type === 'queue') {
+          load = 35;
+          status = 'healthy';
         }
 
         return {
@@ -427,7 +497,7 @@ export const useGameStore = create<GameState>((set, get) => {
           status: isPassing ? 'passing' : 'failing',
         },
         interviewerFeedback: feedback,
-        isCompleted: isPassing && isSurge,
+        isCompleted: isPassing,
       });
     },
   };

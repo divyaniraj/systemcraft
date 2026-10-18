@@ -57,7 +57,7 @@ export const SystemNode: React.FC<NodeProps> = ({ id, data, selected }) => {
         <Handle
           type="target"
           position={Position.Left}
-          className="!w-3 !h-3 !bg-slate-400 hover:!bg-cyan-400 !border-2 !border-slate-900"
+          className="!w-3 !h-3 !bg-slate-400 hover:!bg-cyan-400 !border-2 !border-slate-900 cursor-crosshair"
         />
       )}
 
@@ -65,7 +65,7 @@ export const SystemNode: React.FC<NodeProps> = ({ id, data, selected }) => {
       <Handle
         type="source"
         position={Position.Right}
-        className="!w-3 !h-3 !bg-cyan-400 hover:!bg-indigo-400 !border-2 !border-slate-900"
+        className="!w-3 !h-3 !bg-cyan-400 hover:!bg-indigo-400 !border-2 !border-slate-900 cursor-crosshair"
       />
 
       {/* Top Header Tag */}
@@ -90,12 +90,15 @@ export const SystemNode: React.FC<NodeProps> = ({ id, data, selected }) => {
           {/* Delete Action (Except Client) */}
           {nodeData.type !== 'client' && (
             <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 removeNode(id);
               }}
-              title="Remove component"
-              className="text-slate-500 hover:text-rose-400 transition ml-1"
+              title="Delete this component"
+              className="nodrag nopan p-1 rounded-md bg-slate-800/80 hover:bg-rose-500/30 text-slate-400 hover:text-rose-300 border border-slate-700/60 hover:border-rose-500/50 transition cursor-pointer flex items-center justify-center"
             >
               <Trash2 className="w-3 h-3" />
             </button>
