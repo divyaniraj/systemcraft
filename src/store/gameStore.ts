@@ -414,16 +414,36 @@ export const useGameStore = create<GameState>((set, get) => {
         // Healthy system
         if (hasActiveCache) {
           p50 = 12;
-          p95 = 48;
-          p99 = Math.min(currentLevel.slaP99Ms - 15, 65);
+          p95 = 45;
+          p99 = 55;
           errorRate = 0.01;
-          feedback = '🟢 Outstanding design! Cache is absorbing traffic, compute is balanced, and latency is well within SLA. Try simulating a spike!';
+          feedback = '🟢 Outstanding design! Redis is absorbing reads, and latency is well within SLA.';
         } else {
-          p50 = 30;
-          p95 = 90;
-          p99 = Math.min(currentLevel.slaP99Ms + 20, 210);
-          errorRate = 0.04;
-          feedback = '⚡ Basic architecture functional. Watch your p99 latency as traffic scales!';
+          // System without cache - evaluate based on database utilization ratio
+          const dbRatio = totalDbCapacity > 0 ? dbIncomingRPS / totalDbCapacity : 0;
+
+          if (dbRatio <= 0.35) {
+            // Low baseline traffic (e.g. Level 1 MVP: 100 RPS on 800 capacity = 12.5% load)
+            p50 = 18;
+            p95 = 52;
+            p99 = 95; // Passes Level 1 SLA (< 150ms)
+            errorRate = 0.01;
+            feedback = '🟢 Clean MVP architecture! System is handling baseline traffic reliably within SLA and budget.';
+          } else if (dbRatio <= 0.75) {
+            // Moderate load
+            p50 = 28;
+            p95 = 85;
+            p99 = 135;
+            errorRate = 0.02;
+            feedback = '⚡ System is stable, but database utilization is climbing. Keep an eye on latency as traffic grows.';
+          } else {
+            // Near capacity without cache
+            p50 = 48;
+            p95 = 140;
+            p99 = 240;
+            errorRate = 0.05;
+            feedback = '⚠️ Database contention is high! Incoming queries are causing queue delays. Add a Cache to reduce p99.';
+          }
         }
       }
 
