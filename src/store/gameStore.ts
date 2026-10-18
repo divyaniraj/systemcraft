@@ -447,6 +447,22 @@ export const useGameStore = create<GameState>((set, get) => {
         }
       }
 
+      // Check if client connects directly to cache (Anti-pattern)
+      const directClientToCache = edges.some(
+        (e) => clientNodes.some((c) => c.id === e.source) && cacheNodes.some((c) => c.id === e.target)
+      );
+
+      // Check if compute nodes connect downstream to cache/db
+      const computeHasOutputs = appNodes.some(
+        (app) => edges.some((e) => e.source === app.id)
+      );
+
+      if (directClientToCache) {
+        feedback = '⚠️ Architecture Warning: Clients cannot connect directly to Redis Cache. Route traffic through your Load Balancer $\\to$ App Compute nodes, and have App Compute query Redis!';
+      } else if (!computeHasOutputs && activeAppServers.length > 0) {
+        feedback = '⚠️ Disconnected Compute Tier: Your App Compute nodes have no outgoing connections! Connect App Compute to Redis Cache and PostgreSQL Primary.';
+      }
+
       // Check budget
       const overBudget = totalCost > currentLevel.budgetLimit;
       if (overBudget) {
@@ -458,6 +474,8 @@ export const useGameStore = create<GameState>((set, get) => {
         !appOverloaded && 
         !dbOverloaded && 
         !overBudget && 
+        !directClientToCache &&
+        computeHasOutputs &&
         p99 <= currentLevel.slaP99Ms && 
         errorRate <= 0.1 && 
         activeAppServers.length > 0 && 
@@ -467,34 +485,41 @@ export const useGameStore = create<GameState>((set, get) => {
       const updatedNodes = nodes.map((n) => {
         let load = 0;
         let status: 'healthy' | 'warning' | 'critical' | 'idle' = 'healthy';
+        let nodeRPS = activeRPS;
 
         if (n.data.type === 'client') {
           load = 100;
           status = 'healthy';
+          nodeRPS = activeRPS;
         } else if (n.data.type === 'load_balancer') {
           load = Math.min(100, Math.round((activeRPS / n.data.maxRPS) * 100));
           status = load > 90 ? 'critical' : load > 70 ? 'warning' : 'healthy';
+          nodeRPS = activeRPS;
         } else if (n.data.type === 'compute') {
           const serverShare = activeAppServers.length > 0 ? activeRPS / activeAppServers.length : 0;
           load = Math.min(100, Math.round((serverShare / n.data.maxRPS) * 100));
-          status = load > 90 ? 'critical' : load > 75 ? 'warning' : 'healthy';
+          status = load > 95 ? 'critical' : load > 75 ? 'warning' : 'healthy';
+          nodeRPS = Math.round(serverShare); // Now displays the actual split traffic!
         } else if (n.data.type === 'cache') {
-          const cacheRPS = Math.round(activeRPS * 0.90);
+          const cacheRPS = Math.round(activeRPS * 0.95);
           load = Math.min(100, Math.round((cacheRPS / n.data.maxRPS) * 100));
           status = 'healthy';
+          nodeRPS = cacheRPS;
         } else if (n.data.type === 'database') {
           load = Math.min(100, Math.round((dbIncomingRPS / n.data.maxRPS) * 100));
           status = load >= 95 ? 'critical' : load > 75 ? 'warning' : 'healthy';
+          nodeRPS = dbIncomingRPS;
         } else if (n.data.type === 'queue') {
           load = 35;
           status = 'healthy';
+          nodeRPS = Math.round(activeRPS * 0.05);
         }
 
         return {
           ...n,
           data: {
             ...n.data,
-            currentRPS: n.data.type === 'database' ? dbIncomingRPS : activeRPS,
+            currentRPS: nodeRPS,
             loadPercent: load,
             status,
           },
