@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #020617;
+    color: #f8fafc;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    user-select: none;
+  }
+  #root {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    max-width: 100%;
+    border: none;
+  }
+}
+
+@keyframes flow {
+  0% { stroke-dashoffset: 40; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.flow-packet-fast {
+  stroke-dasharray: 6, 14;
+  animation: flow 0.8s linear infinite;
+}
+
+.flow-packet-normal {
+  stroke-dasharray: 5, 15;
+  animation: flow 1.4s linear infinite;
+}
+
+.flow-packet-surge {
+  stroke-dasharray: 4, 8;
+  animation: flow 0.3s linear infinite;
+}
+
+.canvas-grid {
+  background-size: 24px 24px;
+  background-image: radial-gradient(circle, #334155 1px, transparent 1px);
+}
+
+.pulse-glow {
+  box-shadow: 0 0 15px rgba(56, 189, 248, 0.35);
+}
+
+.pulse-glow-amber {
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.4);
+}
+
+.pulse-glow-rose {
+  box-shadow: 0 0 25px rgba(244, 63, 94, 0.55);
+}
+
+.pulse-glow-green {
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.35);
+}
