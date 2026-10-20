@@ -17,6 +17,7 @@ import type { ComponentType, SystemNodeData } from '../../types/game';
 
 const nodeTypes = {
   client: SystemNode,
+  cdn: SystemNode,
   load_balancer: SystemNode,
   compute: SystemNode,
   cache: SystemNode,

@@ -4,7 +4,8 @@ export type ComponentType =
   | 'compute' 
   | 'cache' 
   | 'database' 
-  | 'queue';
+  | 'queue'
+  | 'cdn';
 
 export interface ComponentSpecs {
   type: ComponentType;
@@ -45,6 +46,13 @@ export interface TelemetryMetrics {
   status: 'passing' | 'warning' | 'failing';
 }
 
+export interface LevelHint {
+  level: number; // 1: Architectural Concept, 2: Wiring & Topology, 3: Capacity Math
+  category: 'Architectural Concept' | 'Wiring & Topology' | 'Capacity & Math Solution';
+  title: string;
+  hint: string;
+}
+
 export interface LevelDefinition {
   levelNumber: number; // 1, 2, or 3
   title: string;
@@ -65,6 +73,7 @@ export interface LevelDefinition {
     target: string;
   }[];
   tips: string[];
+  hints: LevelHint[];
 }
 
 export interface Question {
@@ -76,3 +85,21 @@ export interface Question {
   description: string;
   levels: LevelDefinition[];
 }
+
+export interface UserProfile {
+  id: string;
+  username: string;
+  createdAt: number;
+  avatarColor: string;
+}
+
+export interface SavedLevelData {
+  isCompleted: boolean;
+  bestP99: number;
+  bestCost: number;
+  nodes: any[];
+  edges: any[];
+  updatedAt: number;
+}
+
+export type UserProgressMap = Record<string, Record<number, SavedLevelData>>; // questionId -> levelNumber -> SavedLevelData

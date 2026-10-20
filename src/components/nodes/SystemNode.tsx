@@ -10,13 +10,15 @@ import {
   Layers, 
   Trash2, 
   AlertTriangle,
-  Flame
+  Flame,
+  Globe
 } from 'lucide-react';
 import type { SystemNodeData } from '../../types/game';
 import { useGameStore } from '../../store/gameStore';
 
 const ICON_MAP: Record<string, React.ReactNode> = {
   client: <Users className="w-4 h-4 text-blue-400" />,
+  cdn: <Globe className="w-4 h-4 text-teal-400" />,
   load_balancer: <GitFork className="w-4 h-4 text-purple-400" />,
   compute: <Server className="w-4 h-4 text-cyan-400" />,
   cache: <Zap className="w-4 h-4 text-emerald-400" />,
@@ -26,6 +28,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
 
 const BORDER_MAP: Record<string, string> = {
   client: 'border-blue-500/40 hover:border-blue-400',
+  cdn: 'border-teal-500/40 hover:border-teal-400',
   load_balancer: 'border-purple-500/40 hover:border-purple-400',
   compute: 'border-cyan-500/40 hover:border-cyan-400',
   cache: 'border-emerald-500/40 hover:border-emerald-400',

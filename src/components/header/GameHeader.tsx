@@ -4,11 +4,17 @@ import {
   Pause, 
   RotateCcw, 
   Zap, 
-  Boxes
+  Boxes,
+  Lightbulb
 } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
 
-export const GameHeader: React.FC = () => {
+interface GameHeaderProps {
+  onOpenAuth: () => void;
+  onOpenHints: () => void;
+}
+
+export const GameHeader: React.FC<GameHeaderProps> = ({ onOpenAuth, onOpenHints }) => {
   const currentQuestion = useGameStore((s) => s.currentQuestion);
   const currentLevel = useGameStore((s) => s.currentLevel);
   const isSimulating = useGameStore((s) => s.isSimulating);
@@ -16,6 +22,7 @@ export const GameHeader: React.FC = () => {
   const toggleSimulation = useGameStore((s) => s.toggleSimulation);
   const toggleSurge = useGameStore((s) => s.toggleSurge);
   const resetCurrentCanvas = useGameStore((s) => s.resetCurrentCanvas);
+  const currentUser = useGameStore((s) => s.currentUser);
 
   return (
     <header className="h-14 border-b border-slate-800 bg-slate-900/90 backdrop-blur px-5 flex items-center justify-between shrink-0 select-none">
@@ -66,6 +73,33 @@ export const GameHeader: React.FC = () => {
 
       {/* Action Controls */}
       <div className="flex items-center gap-2.5">
+        {/* Hints Button */}
+        <button
+          onClick={onOpenHints}
+          title="Level Hints"
+          className="text-xs px-3 py-1.5 rounded-md font-semibold border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition flex items-center gap-1.5"
+        >
+          <Lightbulb className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Hints</span>
+        </button>
+
+        {/* User Avatar Button */}
+        <button
+          onClick={onOpenAuth}
+          title={`Logged in as ${currentUser.username}`}
+          className="flex items-center gap-1.5 px-2 py-1 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-700 transition"
+        >
+          <div
+            className="w-5 h-5 rounded-full flex items-center justify-center text-white font-black text-[9px] shrink-0"
+            style={{ backgroundColor: currentUser.avatarColor }}
+          >
+            {currentUser.username.substring(0, 2).toUpperCase()}
+          </div>
+          <span className="text-xs text-slate-300 hidden sm:inline max-w-[80px] truncate">
+            {currentUser.username}
+          </span>
+        </button>
+
         {/* Surge Spike Toggle */}
         <button
           onClick={toggleSurge}

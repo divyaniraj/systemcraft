@@ -11,7 +11,8 @@ import {
   HelpCircle,
   Briefcase,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  Globe
 } from 'lucide-react';
 import { COMPONENT_CATALOG } from '../../data/components';
 import { useGameStore } from '../../store/gameStore';
@@ -24,6 +25,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
   Zap: <Zap className="w-3.5 h-3.5 text-emerald-400" />,
   Database: <Database className="w-3.5 h-3.5 text-amber-400" />,
   Layers: <Layers className="w-3.5 h-3.5 text-indigo-400" />,
+  Globe: <Globe className="w-3.5 h-3.5 text-sky-400" />,
 };
 
 const DIFFICULTY_COLORS: Record<string, { bg: string; text: string; border: string }> = {

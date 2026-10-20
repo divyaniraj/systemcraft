@@ -1,5 +1,15 @@
 import type { Question } from '../types/game';
 
+const ALL_COMPONENTS: Question['levels'][0]['allowedComponents'] = [
+  'client',
+  'cdn',
+  'load_balancer',
+  'compute',
+  'cache',
+  'database',
+  'queue',
+];
+
 export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
   {
     id: 1,
@@ -12,13 +22,13 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
       {
         levelNumber: 1,
         title: 'Level 1: The MVP (Single Instance)',
-        subtitle: 'Core Redirection Flow',
-        interviewerPrompt: 'Welcome to your interview! Let\'s start with a classic: Design TinyURL. An incoming user submits a long URL and receives a 7-character hash, or visits a short link to get redirected. For this MVP, design the basic system to handle 100 RPS within a $100/mo budget. You must connect the user traffic to a compute server and persistent database.',
+        subtitle: 'Core Redirection Flow (100 RPS)',
+        interviewerPrompt: 'Welcome to your interview! Let\'s start with a classic: Design TinyURL. An incoming user submits a long URL and receives a 7-character hash, or visits a short link to get redirected. For this MVP, design the basic system to handle 100 RPS within a $120/mo budget. You must connect the user traffic to a compute server and persistent database.',
         targetRPS: 100,
         surgeRPS: 250,
         slaP99Ms: 150,
         budgetLimit: 120,
-        allowedComponents: ['client', 'compute', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -31,6 +41,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
           'Add an App Compute Node to run the key generation hashing algorithm.',
           'Connect the Compute Node to PostgreSQL to store the URL mappings.',
         ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'The Three-Tier Architecture',
+            hint: 'In web architecture, incoming requests must flow from Client -> Compute (Application Server) -> Database. Never connect users directly to storage.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Node Cable Connections',
+            hint: 'Drag an "App Compute Node" and a "PostgreSQL Primary" onto the canvas. Connect User Traffic -> App Compute Node, then connect App Compute Node -> PostgreSQL Primary.',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Cost & RPS Breakdown',
+            hint: '1 App Server ($40) + 1 PostgreSQL Primary ($50) = $90/mo (within $120 budget). The server handles up to 5,000 RPS, easily satisfying the 100 RPS target with p99 < 100ms.',
+          },
+        ],
       },
       {
         levelNumber: 2,
@@ -41,7 +71,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 14000,
         slaP99Ms: 80,
         budgetLimit: 250,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -51,8 +81,28 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         ],
         tips: [
           'Add a Load Balancer right after the Client ingress to distribute traffic.',
-          'Scale your compute tier horizontally with multiple App Servers.',
-          'Connect the App Servers to a Redis Cache layer to absorb 90% of read redirects.',
+          'Scale your compute tier horizontally with 2 App Servers.',
+          'Connect App Servers to both Redis Cache and PostgreSQL Primary.',
+        ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Horizontal Scaling + Read Caching',
+            hint: 'A single compute node only handles 5,000 RPS. To handle 10,000 RPS, use a Load Balancer to split traffic between two App Compute nodes, and add Redis Cache to absorb 95% of redirect reads.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Correct Connection Pattern',
+            hint: 'Connect: User Traffic -> Load Balancer -> App Servers 1 & 2. Then connect BOTH App Servers to Redis Cache (for fast reads) AND to PostgreSQL Primary (for writes and cache misses). Note: Do NOT wire User Traffic directly to Redis.',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Budget and Load Balance',
+            hint: 'Cost: 1 Load Balancer ($25) + 2 App Servers ($80) + 1 Redis ($35) + 1 DB ($50) = $190/mo ($250 budget). Each App Server handles 5,000 RPS. Redis absorbs 9,500 RPS so Postgres only sees 500 RPS. Latency p99 drops to ~45ms.',
+          },
         ],
       },
       {
@@ -64,7 +114,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 35000,
         slaP99Ms: 60,
         budgetLimit: 450,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database', 'queue'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -75,6 +125,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         tips: [
           'Route redirect traffic to Redis cache for instant p99 response times.',
           'Connect the App servers to an Event Queue (Kafka) to process analytics asynchronously.',
+        ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Decoupling Synchronous & Asynchronous Paths',
+            hint: 'URL redirection must be fast (< 60ms). Writing analytics directly to the database slows down the redirect. Emit click events to a Kafka Queue so worker consumers can log analytics asynchronously in the background.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Wiring Kafka and Edge CDN',
+            hint: 'Client -> Load Balancer -> App Compute Nodes (scale to 5 servers for 25k RPS). Connect App Servers to Redis Cache (for fast redirect lookups) and to Kafka Event Queue (for click event streaming).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Sizing & Cost',
+            hint: '5 App Servers ($200) + 1 Load Balancer ($25) + 1 Redis ($35) + 1 Postgres ($50) + 1 Kafka ($65) = $375/mo (under $450 budget limit). Kafka buffers 25k click events/sec without blocking user redirects.',
+          },
         ],
       },
     ],
@@ -90,13 +160,13 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
       {
         levelNumber: 1,
         title: 'Level 1: The Boutique MVP',
-        subtitle: 'Single Storefront Persistence',
+        subtitle: 'Single Storefront Persistence (50 RPS)',
         interviewerPrompt: 'We are launching our initial e-commerce storefront. We have moderate baseline traffic (50 RPS). Design an architecture that connects shoppers to application servers and stores inventory in a relational database with strict ACID guarantees. Keep total monthly cost under $120.',
         targetRPS: 50,
         surgeRPS: 120,
         slaP99Ms: 180,
         budgetLimit: 120,
-        allowedComponents: ['client', 'compute', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -108,6 +178,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
           'Connect Shoppers to an App Compute Node.',
           'Connect App Compute to PostgreSQL Primary for ACID compliance on orders.',
         ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'ACID Relational Core',
+            hint: 'For e-commerce order checkout and inventory balance, relational databases with ACID guarantees (PostgreSQL) prevent double-spending and overselling inventory.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Basic Storefront Connections',
+            hint: 'Shoppers -> App Compute Node -> PostgreSQL Primary. The compute node verifies product inventory and writes confirmed orders to PostgreSQL.',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Capacity & Budget Balance',
+            hint: '1 Compute Node ($40) + 1 Postgres DB ($50) = $90/mo ($120 budget). At 50 RPS, load is only 4%, keeping latency under 100ms.',
+          },
+        ],
       },
       {
         levelNumber: 2,
@@ -118,7 +208,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 3500,
         slaP99Ms: 250,
         budgetLimit: 260,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -130,6 +220,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
           'Use an NGINX Load Balancer to distribute traffic between at least two App Compute nodes.',
           'Add a Redis In-Memory Cache to absorb catalog queries.',
         ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Shielding Database Read Pools',
+            hint: 'During flash sales, 90%+ of shoppers are browsing items, not checking out. If every page view hits PostgreSQL, connection pools lock up. Redis answers product details in RAM in < 1ms.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Balanced Tier Architecture',
+            hint: 'Shoppers -> Load Balancer -> App Compute Nodes. Connect compute nodes to Redis Cache (for catalog browsing) and PostgreSQL (for writes & checkout orders).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Cost Math',
+            hint: '1 Load Balancer ($25) + 1 or 2 App Servers ($40-$80) + 1 Redis ($35) + 1 Postgres ($50) = $150-$190/mo ($260 budget). Redis absorbs 2,250 RPS, leaving Postgres with only 250 RPS.',
+          },
+        ],
       },
       {
         levelNumber: 3,
@@ -140,7 +250,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 28000,
         slaP99Ms: 160,
         budgetLimit: 550,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database', 'queue'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -151,6 +261,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         tips: [
           'Buffer write bursts through Kafka so background payment workers process them without failing.',
           'Keep catalog reads cached in Redis.',
+        ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Order Buffer Queueing',
+            hint: 'Databases cannot sustain 20,000 simultaneous transactional writes. Pushing orders into an asynchronous Kafka queue gives shoppers instant order confirmations while backend payment workers process the queue safely.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Queue Integration',
+            hint: 'Shoppers -> Load Balancer -> 4 App Compute Nodes. Connect App Nodes to Redis (reads), Kafka Queue (order write buffer), and Postgres DB (persisted data store).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Scaling Formula',
+            hint: '4 Compute Nodes (20,000 RPS total capacity @ $160) + Load Balancer ($25) + Redis ($35) + Postgres ($50) + Kafka ($65) = $335/mo (well under $550 budget). p99 latency stays under 80ms.',
+          },
         ],
       },
     ],
@@ -172,7 +302,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 900,
         slaP99Ms: 100,
         budgetLimit: 150,
-        allowedComponents: ['client', 'compute', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -182,6 +312,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         ],
         tips: [
           'API requests should flow through the Compute layer to check API tokens before touching persistence.',
+        ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'API Gateway Inspection',
+            hint: 'The gateway sits in front of backend resources to inspect Authorization headers and enforce rate limits before forwarding traffic.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Simple Gateway Setup',
+            hint: 'API Clients -> App Compute Node -> PostgreSQL Primary (storing client quotas and API key configurations).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Budget & SLA Check',
+            hint: '1 Compute Node ($40) + 1 Postgres ($50) = $90/mo ($150 budget). Handles 500 RPS easily with p99 < 75ms.',
+          },
         ],
       },
       {
@@ -193,7 +343,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 12000,
         slaP99Ms: 50,
         budgetLimit: 300,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -205,6 +355,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
           'A Load Balancer distributes requests to multiple compute nodes.',
           'Redis cluster enables centralized atomic counter increments in sub-millisecond time.',
         ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Centralized Counter Store',
+            hint: 'Distributed rate limiters require shared in-memory counters (e.g. Redis INCR or sliding window log) so all gateway instances see identical request counts for each client IP / API key.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Load Balanced Gateways to Redis',
+            hint: 'API Clients -> Load Balancer -> 2 App Compute Nodes -> Redis Cache & Postgres DB. Redis handles the high-frequency sliding window checks; Postgres stores long-term tenant rules.',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Throughput Math',
+            hint: '2 App Compute Nodes (10,000 RPS max) handle 8,000 RPS. 1 Load Balancer ($25) + 2 Compute ($80) + Redis ($35) + Postgres ($50) = $190/mo ($300 budget). Redis atomic checks keep p99 under 45ms.',
+          },
+        ],
       },
       {
         levelNumber: 3,
@@ -215,7 +385,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 50000,
         slaP99Ms: 45,
         budgetLimit: 650,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database', 'queue'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -225,6 +395,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         ],
         tips: [
           'Use Kafka to stream security audit events without slowing down immediate 429 Too Many Requests responses.',
+        ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Edge Ingress and Log Shedding',
+            hint: 'Under heavy DDoS bursts, blocked requests must be rejected immediately at the edge. Security audit events and rate-limit breach telemetry are sent to Kafka to avoid slowing down API responses.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Full DDoS Protection Topology',
+            hint: 'Ingress -> Load Balancer -> 7 App Compute Nodes. Connect App Nodes to Redis (for 1ms counter checks), Kafka (audit stream), and Postgres (user account records).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Budget Allocation',
+            hint: '7 Compute Nodes ($280) + Load Balancer ($25) + Redis ($35) + Postgres ($50) + Kafka ($65) = $455/mo ($650 limit). Total compute capacity = 35,000 RPS.',
+          },
         ],
       },
     ],
@@ -246,7 +436,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 2000,
         slaP99Ms: 100,
         budgetLimit: 200,
-        allowedComponents: ['client', 'compute', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -258,6 +448,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
           'Connect client traffic to compute servers handling real-time sessions.',
           'Store message logs in a database.',
         ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Stateful vs Stateless Gateways',
+            hint: 'Chat systems keep persistent connections open with clients. Incoming messages are routed to the recipient and written to persistent storage.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Chat MVP Wiring',
+            hint: 'Active Chatters -> App Compute Node -> PostgreSQL Primary. 1 Compute Node handles 1,000 RPS with ease.',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Baseline Cost',
+            hint: '1 Compute ($40) + 1 Postgres ($50) = $90/mo ($200 budget). p99 latency stays under 80ms.',
+          },
+        ],
       },
       {
         levelNumber: 2,
@@ -268,7 +478,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 22000,
         slaP99Ms: 65,
         budgetLimit: 450,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -280,6 +490,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
           'Load Balancers maintain persistent connection routing.',
           'Redis Pub/Sub serves as the central message bus connecting separate chat servers.',
         ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Cross-Server Pub/Sub Bus',
+            hint: 'When User A (on Server 1) messages User B (on Server 2), Server 1 publishes the message to Redis Pub/Sub. Server 2 is subscribed and delivers it to User B in real time.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Cluster Architecture',
+            hint: 'Chatters -> Load Balancer -> 3 App Compute Nodes. Connect App Nodes to Redis (for Pub/Sub message dispatching) and PostgreSQL (for permanent chat history).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: '3-Server Sizing',
+            hint: '3 App Servers (15,000 RPS capacity @ $120) + Load Balancer ($25) + Redis ($35) + Postgres ($50) = $230/mo ($450 budget). Redis pub/sub achieves < 50ms p99 latency.',
+          },
+        ],
       },
       {
         levelNumber: 3,
@@ -290,7 +520,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 60000,
         slaP99Ms: 70,
         budgetLimit: 850,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database', 'queue'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -301,12 +531,32 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         tips: [
           'Use Kafka to guarantee offline message persistence and async delivery notifications.',
         ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Guaranteed At-Least-Once Delivery',
+            hint: 'Real-time Redis Pub/Sub does not persist messages if the recipient is offline. Kafka stores unacknowledged messages durably on disk until the offline user reconnects and acknowledges receipt.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Dual Real-Time and Durable Pipeline',
+            hint: 'Chatters -> Load Balancer -> 9 App Compute Nodes. Connect compute nodes to Redis (live delivery), Kafka Queue (offline buffer), and Postgres (metadata).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Full Scale Sizing',
+            hint: '9 Compute Nodes ($360) + Load Balancer ($25) + Redis ($35) + Postgres ($50) + Kafka ($65) = $535/mo ($850 budget). 45,000 RPS capacity is fully satisfied.',
+          },
+        ],
       },
     ],
   },
   {
     id: 5,
-    title: 'Design a Video Streaming Platform (YouTube / Netflix)',
+    title: 'Design a Video Streaming Platform (Netflix / YouTube)',
     slug: 'video-streaming',
     difficulty: 'Hard',
     companyTags: ['Netflix', 'YouTube', 'Twitch'],
@@ -321,7 +571,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 3000,
         slaP99Ms: 120,
         budgetLimit: 250,
-        allowedComponents: ['client', 'compute', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -331,6 +581,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         ],
         tips: [
           'Connect viewers to compute services verifying user subscriptions and video manifest.',
+        ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Control Plane vs Data Plane',
+            hint: 'In video streaming, users don\'t download 4K video files from the web server. The web server handles the Control Plane (auth, playlists, subtitles, license check), while CDN handles the heavy video chunks.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Metadata Gateway Setup',
+            hint: 'Video Viewers -> App Compute Node -> PostgreSQL Primary (storing video catalog, user profiles, and subscription entitlement).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Baseline Cost',
+            hint: '1 Compute Node ($40) + 1 Postgres ($50) = $90/mo ($250 budget). Handles 1,500 RPS with p99 < 85ms.',
+          },
         ],
       },
       {
@@ -342,7 +612,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 35000,
         slaP99Ms: 50,
         budgetLimit: 500,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -352,6 +622,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         ],
         tips: [
           'Cache video manifests and user profiles in Redis to answer 95%+ of queries without hitting the database.',
+        ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Manifest Caching & Hot Keys',
+            hint: 'Trending titles create massive hot-key reads. Storing pre-generated video manifests in Redis RAM allows serving 25,000 reads/sec in sub-millisecond latency.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'Tiered Caching',
+            hint: 'Viewers -> Load Balancer -> 5 App Compute Nodes. Connect all App Nodes to Redis Cache (for video manifest lookups) and PostgreSQL (for updates and subscriptions).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'Sizing & Cost',
+            hint: '5 Compute Nodes ($200) + Load Balancer ($25) + Redis ($35) + Postgres ($50) = $310/mo ($500 budget limit). p99 latency stays under 45ms.',
+          },
         ],
       },
       {
@@ -363,7 +653,7 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         surgeRPS: 80000,
         slaP99Ms: 60,
         budgetLimit: 1100,
-        allowedComponents: ['client', 'load_balancer', 'compute', 'cache', 'database', 'queue'],
+        allowedComponents: ALL_COMPONENTS,
         initialNodes: [
           {
             type: 'client',
@@ -373,6 +663,26 @@ export const SYSTEM_DESIGN_QUESTIONS: Question[] = [
         ],
         tips: [
           'Stream heavy analytics and live stream state through Kafka into background storage workers.',
+        ],
+        hints: [
+          {
+            level: 1,
+            category: 'Architectural Concept',
+            title: 'Live Stream Telemetry Ingestion',
+            hint: 'Heartbeat ping events and viewer counts at 60k RPS would overwhelm a database. Ingest telemetry directly into Kafka partitions for stream processing.',
+          },
+          {
+            level: 2,
+            category: 'Wiring & Topology',
+            title: 'High-Concurrency Architecture',
+            hint: 'Viewers -> Load Balancer -> 12 App Compute Nodes (handling 60k RPS). Connect compute nodes to Redis (manifests & live counters), Kafka (telemetry stream), and Postgres (metadata).',
+          },
+          {
+            level: 3,
+            category: 'Capacity & Math Solution',
+            title: 'High-Scale Budgeting',
+            hint: '12 Compute Nodes ($480) + Load Balancer ($25) + Redis ($35) + Postgres ($50) + Kafka ($65) = $655/mo ($1,100 budget). Throughput reaches 60,000 RPS with p99 < 50ms.',
+          },
         ],
       },
     ],

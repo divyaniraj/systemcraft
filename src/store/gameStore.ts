@@ -12,9 +12,10 @@ import type {
   OnConnect, 
   Connection 
 } from '@xyflow/react';
-import type { ComponentType, LevelDefinition, Question, SystemNodeData, TelemetryMetrics } from '../types/game';
+import type { ComponentType, LevelDefinition, Question, SystemNodeData, TelemetryMetrics, UserProfile, UserProgressMap } from '../types/game';
 import { SYSTEM_DESIGN_QUESTIONS } from '../data/questions';
 import { COMPONENT_CATALOG } from '../data/components';
+import { StorageService } from '../services/storageService';
 
 interface GameState {
   questions: Question[];
@@ -32,6 +33,11 @@ interface GameState {
   telemetry: TelemetryMetrics;
   interviewerFeedback: string;
   isCompleted: boolean;
+
+  // User / profile state
+  currentUser: UserProfile;
+  usersList: UserProfile[];
+  userProgress: UserProgressMap;
   
   // Actions
   onNodesChange: OnNodesChange<Node<SystemNodeData>>;
@@ -46,6 +52,9 @@ interface GameState {
   nextLevel: () => void;
   resetCurrentCanvas: () => void;
   runSimulationTick: () => void;
+  switchUser: (userId: string) => void;
+  createUser: (username: string) => void;
+  saveCurrentLevelProgress: (p99: number, cost: number) => void;
 }
 
 function calculateInitialStateForLevel(level: LevelDefinition) {
@@ -99,11 +108,16 @@ function calculateInitialStateForLevel(level: LevelDefinition) {
 
 export const useGameStore = create<GameState>((set, get) => {
   const initialQuestions = SYSTEM_DESIGN_QUESTIONS;
-  const initialQIndex = 0; // Starts at Question 1: URL Shortener (Easy)
-  const initialLIndex = 0; // Level 1
+  const initialQIndex = 0;
+  const initialLIndex = 0;
   const initialQuestion = initialQuestions[initialQIndex];
   const initialLevel = initialQuestion.levels[initialLIndex];
   const initialSetup = calculateInitialStateForLevel(initialLevel);
+
+  // Load user profile data from localStorage
+  const initialUser = StorageService.getActiveUser();
+  const initialUsers = StorageService.getUsers();
+  const initialProgress = StorageService.getUserProgress(initialUser.id);
 
   return {
     questions: initialQuestions,
@@ -118,6 +132,10 @@ export const useGameStore = create<GameState>((set, get) => {
     telemetry: initialSetup.telemetry,
     interviewerFeedback: initialLevel.interviewerPrompt,
     isCompleted: false,
+
+    currentUser: initialUser,
+    usersList: initialUsers,
+    userProgress: initialProgress,
 
     onNodesChange: (changes) => {
       set({
@@ -256,14 +274,18 @@ export const useGameStore = create<GameState>((set, get) => {
     },
 
     nextLevel: () => {
-      const { currentQuestion, currentQuestionIndex, currentLevelIndex, questions } = get();
+      const { currentQuestion, currentQuestionIndex, currentLevelIndex, questions, telemetry, currentUser } = get();
+
+      // Save progress when completing a level
+      get().saveCurrentLevelProgress(telemetry.p99LatencyMs, telemetry.monthlyCost);
+
       if (currentLevelIndex < currentQuestion.levels.length - 1) {
-        // Move to next sub-level of the same question
         get().selectLevel(currentLevelIndex + 1);
       } else if (currentQuestionIndex < questions.length - 1) {
-        // Solved all 3 levels of this question, advance to next question!
         get().selectQuestion(currentQuestionIndex + 1);
       }
+      // Refresh progress map in store after saving
+      set({ userProgress: StorageService.getUserProgress(currentUser.id) });
     },
 
     resetCurrentCanvas: () => {
@@ -278,6 +300,39 @@ export const useGameStore = create<GameState>((set, get) => {
         isCompleted: false,
       });
       get().runSimulationTick();
+    },
+
+    switchUser: (userId: string) => {
+      const users = StorageService.getUsers();
+      const found = users.find((u) => u.id === userId);
+      if (!found) return;
+      StorageService.setActiveUser(userId);
+      const progress = StorageService.getUserProgress(userId);
+      set({ currentUser: found, userProgress: progress });
+    },
+
+    createUser: (username: string) => {
+      const newUser = StorageService.createUser(username);
+      const users = StorageService.getUsers();
+      const progress = StorageService.getUserProgress(newUser.id);
+      set({ currentUser: newUser, usersList: users, userProgress: progress });
+    },
+
+    saveCurrentLevelProgress: (p99: number, cost: number) => {
+      const { currentUser, currentQuestion, currentLevel, nodes, edges } = get();
+      StorageService.saveLevelProgress(
+        currentUser.id,
+        currentQuestion.id,
+        currentLevel.levelNumber,
+        {
+          isCompleted: true,
+          bestP99: p99,
+          bestCost: cost,
+          nodes: nodes.map((n) => ({ id: n.id, type: n.type, position: n.position, data: n.data })),
+          edges: edges.map((e) => ({ id: e.id, source: e.source, target: e.target })),
+          updatedAt: Date.now(),
+        }
+      );
     },
 
     runSimulationTick: () => {
